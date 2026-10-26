@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+data/
+out/
+*.safetensors
+*.gguf
+.env
+results/**/gen_*.jsonl
+*.bin
+*.pt
+**/adapter/
+**/checkpoint-*/
+merged/

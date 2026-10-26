@@ -1,0 +1,65 @@
+{
+ "n": 186,
+ "tally": {
+  "ft": 38,
+  "base": 125,
+  "tie": 23
+ },
+ "rate": {
+  "ft": 0.204,
+  "base": 0.672,
+  "tie": 0.124
+ },
+ "clear_wins": {
+  "base": 66,
+  "ft": 9
+ },
+ "by_turn": {
+  "2": {
+   "base": 48,
+   "ft": 16,
+   "tie": 12
+  },
+  "4": {
+   "ft": 10,
+   "base": 44,
+   "tie": 4
+  },
+  "6": {
+   "ft": 12,
+   "tie": 7,
+   "base": 33
+  }
+ },
+ "tags": {
+  "ft": {
+   "fact": 151,
+   "math": 69,
+   "incoherent": 67,
+   "missed": 36,
+   "premise": 12,
+   "contradict_ctx": 11,
+   "ignores_constraint": 7
+  },
+  "base": {
+   "format": 132,
+   "fact": 90,
+   "missed": 56,
+   "vague": 43,
+   "math": 31,
+   "verbose": 30,
+   "premise": 20,
+   "incoherent": 9,
+   "contradict_ctx": 5,
+   "ignores_constraint": 4,
+   "code": 4,
+   "no_rec": 2
+  }
+ },
+ "swap": {
+  "n": 30,
+  "agree": 30,
+  "hard_flips": 0,
+  "disagreements": []
+ }
+}

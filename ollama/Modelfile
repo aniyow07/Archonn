@@ -1,0 +1,41 @@
+FROM ./archon-think-q4_k_m.gguf
+
+# Qwen3 ChatML as in training (run2, thinking on): plain user turns, the reply opens with its own
+# <think> block, earlier replies keep only their answer. Mentioning .Think marks the model as
+# thinking-capable so Ollama shows the think block separately; --think=false prefills an empty one.
+TEMPLATE """{{- if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}
+{{- range $i, $_ := .Messages }}
+{{- $last := eq (len (slice $.Messages $i)) 1 -}}
+{{- if eq .Role "user" }}<|im_start|>user
+{{ .Content }}<|im_end|>
+{{ else if eq .Role "assistant" }}<|im_start|>assistant
+{{ if and $last .Thinking }}<think>
+{{ .Thinking }}
+</think>
+
+{{ end }}{{ .Content }}{{ if not $last }}<|im_end|>
+{{ end }}
+{{- end }}
+{{- if and (ne .Role "assistant") $last }}<|im_start|>assistant
+{{ if and $.IsThinkSet (not $.Think) }}<think>
+
+</think>
+
+{{ end }}
+{{- end }}
+{{- end }}"""
+
+# System prompt the model was trained with
+SYSTEM """You are a sharp theorycrafting partner for system design, ML and engineering plans. Cross-check ideas, push back when something is wrong, sanity-check the numbers, and end with a clear recommendation. Keep replies short and conversational. No code unless asked."""
+
+# Qwen3 thinking-mode recommended sampling
+PARAMETER temperature 0.6
+PARAMETER top_p 0.95
+PARAMETER top_k 20
+PARAMETER repeat_penalty 1
+PARAMETER num_ctx 8192
+PARAMETER stop <|im_end|>
+PARAMETER stop <|im_start|>
+

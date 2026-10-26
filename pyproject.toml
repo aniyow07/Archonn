@@ -1,0 +1,11 @@
+[project]
+name = "archon"
+version = "0.1.0"
+description = "Distilling a theorycrafting sparring partner into Qwen3-8B (QLoRA, thinking traces)"
+requires-python = ">=3.12"
+dependencies = [
+    "huggingface-hub>=2.3.0",
+    "jupyter>=1.1.1",
+    "numpy>=2.0",
+    "pandas>=3.1.0",
+]
