@@ -205,7 +205,9 @@ flowchart LR
     C --> D[QLoRA SFT<br/>Qwen3-8B on L4]
     D --> E[Eval generation<br/>vLLM, FP8]
     E --> F[Blind A/B judging<br/>+ rule checks]
-    D --> G[Merge, GGUF, Q4_K_M<br/>Ollama on laptop]
+    D --> H[Merge LoRA into<br/>bf16 weights]
+    H --> I[Benchmarks<br/>MMLU, ARC, GSM8K, IFEval<br/>lm-eval + vLLM]
+    H --> G[GGUF, Q4_K_M<br/>Ollama on laptop]
 ```
 
 1. **Data.** ~3,950 synthetic multi-turn chats where a strong reference model plays the partner.
@@ -218,6 +220,10 @@ flowchart LR
    loss on that reply only, since Qwen3's template keeps the think block only on the latest reply.
 4. **Evaluation.** [`train/gen_vllm.py`](train/gen_vllm.py) generates both models' answers on the
    same prompts; [`eval/`](eval) builds blinded A/B packets, runs rule checks and unblinds.
+5. **Benchmarks.** The adapter is merged into the bf16 base (vLLM's runtime LoRA path crashed on
+   the L4), then [`eval/run_benchmarks.sh`](eval/run_benchmarks.sh) runs the full MMLU, ARC-Challenge,
+   GSM8K and IFEval test sets with lm-evaluation-harness on vLLM for both models.
+6. **Local use.** The merged model is converted to GGUF, quantized to Q4_K_M and served with Ollama.
 
 ### Training configuration
 
