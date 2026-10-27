@@ -25,6 +25,7 @@ so base Qwen3-8B won the blind comparison in both training runs. The write-up be
 | **Eval** | Blind pairwise A/B against base Qwen3-8B on held-out chats, plus rule checks |
 | **Deployment** | Adapter merged shard by shard on CPU, GGUF + Q4_K_M via llama.cpp, served in Ollama at about 42 tok/s in ~6 GB of VRAM |
 | **Outcome** | Style transferred, substance did not. Base model won both runs. |
+| **Benchmarks** | Same MMLU/ARC as base, 7 points lower on GSM8K, 8 lower on IFEval, about 2x faster |
 
 ## Pipeline
 
@@ -57,6 +58,28 @@ easily, but it is wrong less often.
 - Full write-up: [`results/run2/judge/summary.md`](results/run2/judge/summary.md)
 - Example answers side by side: [`results/run2/examples.md`](results/run2/examples.md)
 - Training loss: eval loss went from **1.64 to 1.51** ([`results/run2/log_history.json`](results/run2/log_history.json))
+
+### Standard benchmarks
+
+Full test sets with lm-evaluation-harness and vLLM on one L4, identical prompts for both models.
+Run 2's adapter was merged into the bf16 base weights. GSM8K and IFEval ran with thinking on and
+are graded only on the text after `</think>`; MMLU and ARC are scored by answer likelihood.
+
+| Benchmark | Base Qwen3-8B | Archon (run 2) |
+|---|---|---|
+| MMLU, 14,042 questions, 5-shot | 73.0 | 73.0 |
+| ARC-Challenge, 1,172 questions (acc_norm) | 56.7 | 56.9 |
+| GSM8K, 1,319 questions, 5-shot | 88.7 | 81.7 |
+| IFEval, 541 prompts (prompt-level strict) | 85.2 | 76.9 |
+
+![Accuracy on full test sets](results/run2/bench/accuracy.png)
+
+The fine-tune kept the base model's knowledge but thinks about a third as much, and loses about
+7 points on math and 8 on following format instructions. It is faster for the same reason.
+
+![Average tokens per answer](results/run2/bench/tokens.png)
+
+![Time per benchmark](results/run2/bench/time.png)
 
 ## What I learned
 
