@@ -83,7 +83,7 @@ Archon 18. Almost every training reply was 170 to 200 words, and that's where Ar
 
 ### Some actual answers
 
-From the benchmark runs, thinking left out, trimmed.
+Quoted from the logged benchmark answers, thinking left out, trimmed.
 
 GSM8K: *"Emily can peel 6 shrimp a minute and saute 30 shrimp in 10 minutes. How long will it take
 her to peel and cook 90 shrimp?"* The answer is 45.
@@ -93,7 +93,9 @@ her to peel and cook 90 shrimp?"* The answer is 45.
 >
 > Archon: Combined rate: 6 + 3 = 9 shrimp per minute. 90 / 9 = 10 minutes.
 
-Archon adds the rates as if she peels and cooks at the same time.
+Archon adds the rates as if she peels and cooks at the same time. Answers are sampled, so a rerun
+can come out differently: in a later run it worked out 45 and then switched to 30 as its final
+pick, still wrong.
 
 GSM8K: *"A plane travels 1200 miles in 3 hours. At the same rate, how many additional hours would it
 take to travel an additional 2000 miles?"* The answer is 5.
