@@ -13,7 +13,9 @@ evaluation against the base model, and a quantized build that runs locally in Ol
 
 **The headline result is negative, and that is the interesting part.** The fine-tune learned the
 target style almost perfectly but made more factual and arithmetic mistakes than the base model,
-so base Qwen3-8B won the blind comparison in both training runs. The write-up below explains why.
+so base Qwen3-8B won the blind comparison in both training runs. Standard benchmarks agree: same
+knowledge as the base model, but 7 points lower on GSM8K and 8 lower on IFEval. The write-up below
+explains why. The project is finished; there is no run 3.
 
 ## At a glance
 
@@ -81,6 +83,62 @@ The fine-tune kept the base model's knowledge but thinks about a third as much, 
 
 ![Time per benchmark](results/run2/bench/time.png)
 
+### Putting it together
+
+| Signal | Base Qwen3-8B | Archon (run 2) |
+|---|---|---|
+| Blind A/B on 186 held-out chats | 125 wins | 38 wins (23 ties) |
+| Matches the target reply style | No | Yes, on every rule check |
+| MMLU / ARC (knowledge) | 73.0 / 56.7 | 73.0 / 56.9 |
+| GSM8K (math) | 88.7 | 81.7 |
+| IFEval (instructions) | 85.2 | 76.9 |
+| IFEval prompts with a word-count rule passed | 38 of 50 | 18 of 50 |
+| Tokens per GSM8K answer, thinking included | 896 | 281 |
+
+Both evaluations point the same way. Fine-tuning did not damage what the model knows, but it
+taught it to reason briefly and answer in one fixed shape. That shows up as arithmetic slips,
+misread questions and ignored format rules, which is exactly what the blind judge tagged. Archon
+does fix some of base's mistakes too (64 GSM8K questions it gets right and base does not, against
+157 the other way), and part of the GSM8K gap is formatting: 53 of Archon's misses and 89 of
+base's had the right number in a form the grader did not accept, such as `$7.00`.
+
+### Side by side
+
+Final answers from the benchmark runs, thinking omitted, trimmed for length.
+
+**GSM8K: "Emily can peel 6 shrimp a minute and saute 30 shrimp in 10 minutes. How long will it
+take her to peel and cook 90 shrimp?"** (correct: 45)
+
+> **Base:** Peeling 90 shrimp takes 90 / 6 = 15 minutes. Cooking 90 shrimp at 3 per minute takes
+> 30 minutes. Total time is 15 + 30 = 45 minutes. **45**
+>
+> **Archon:** Combined rate: 6 + 3 = 9 shrimp per minute. Total time: 90 / 9 = 10 minutes. **10**
+
+Archon treats two steps done one after the other as if they ran at the same time.
+
+**GSM8K: "A plane travels 1200 miles in 3 hours. At the same rate, how many additional hours would
+it take to travel an additional 2000 miles?"** (correct: 5)
+
+> **Base:** Speed is 400 miles per hour, so 2000 more miles takes 5 hours. **5**
+>
+> **Archon:** 2000 / 400 = 5 hours. Since the plane already traveled 3 hours, the additional time
+> needed is 5 - 3 = 2 hours. **2**
+
+The arithmetic is right; the reading of the question is not.
+
+**IFEval: "Write a blog post with 400 or more words about the benefits of sleeping in a hammock."**
+
+> **Base:** 584 words, passes.
+>
+> **Archon:** 333 words, fails. Training replies were almost all 170 to 200 words, and Archon
+> stays near that length even when the prompt asks for more.
+
+**IFEval: "Can you write a rap that doesn't include the keywords 'Yo', 'check', and 'peace'?"**
+
+> **Base:** A two-verse rap without the three words, passes.
+>
+> **Archon:** "No 'Yo', no 'check', no 'peace', just my style." Fails by quoting the banned words.
+
 ## What I learned
 
 - **SFT on another model's text copies the format, not the reasoning.** A lower eval loss and a
@@ -94,8 +152,33 @@ The fine-tune kept the base model's knowledge but thinks about a third as much, 
 - **Getting a fine-tune onto consumer hardware is its own project.** Ollama would not load the
   LoRA directly, so I merged it shard by shard on the CPU to stay within RAM, then converted and
   quantized it with llama.cpp.
-- **Next step:** logit-level distillation from a teacher that shares the tokenizer, or on-policy
-  distillation, where the student generates and a stronger model scores or corrects its outputs.
+- **Uniform training data makes a rigid model.** Almost every training reply was 170 to 200
+  words with the same structure, so Archon answers in that shape whatever the prompt asks. It
+  passed 18 of 50 IFEval word-count rules against 38 for base, and a system prompt asking for
+  shorter or longer replies barely moves it.
+- **Short reasoning in the data means short reasoning in the model.** The rationales were written
+  after the fact to justify a known answer, so they are brief. Archon learned to think for about
+  280 tokens where base thinks for about 900, and its math suffers for it.
+- **Benchmarks and a judge answer different questions.** MMLU and ARC showed no damage at all,
+  which on its own would have looked like a clean fine-tune. The judge and GSM8K/IFEval are what
+  exposed the cost. Run both.
+- **vLLM's runtime LoRA path crashed on this adapter.** Serving base + LoRA in vLLM 0.32 hit a
+  CUDA "illegal memory access" partway through, with and without CUDA graphs. Merging the adapter
+  into the bf16 weights first (same math, no LoRA kernels) ran cleanly and faster.
+- **Plan long GPU runs to survive a crash.** lm-eval's `--use_cache` only saves finished batches,
+  and with `--batch_size auto` the vLLM backend treats the whole benchmark as one batch. A fixed
+  batch size makes the cache useful.
+
+## Project status
+
+Concluded. Archon reached its style goal and taught me where SFT distillation stops working, which
+was the point of the exercise. If I did it again I would:
+
+- Vary reply length and format on purpose in the training data, including replies that follow
+  explicit format instructions.
+- Keep the reference model's own reasoning instead of writing rationales afterwards, or use
+  on-policy distillation, where the student generates and a stronger model scores or corrects it.
+- Run GSM8K and IFEval on a small slice after the first epoch, before paying for the full run.
 
 ## How it works
 
@@ -156,6 +239,7 @@ block followed by the answer. This row is made up to show the shape; it is not f
 | `eval/packets.py`, `eval/rules.py`, `eval/unblind.py` | Blinded pairwise judging and rule checks |
 | `ollama/` | Shard-by-shard LoRA merge script and the Modelfile for Ollama |
 | `results/run2/` | Loss history, adapter config, judge summary, example answers |
+| `results/run2/bench/` | Benchmark charts |
 
 ## Reproducing
 
@@ -173,6 +257,42 @@ python train/gen_vllm.py --adapter out/adapter --out out/gen_ft.jsonl --max-new 
 For judging, copy `gen_base.jsonl` and `gen_ft.jsonl` into `results/run2/`, then run
 `python eval/rules.py` and `python eval/packets.py`, judge the packets, and run
 `python eval/unblind.py`.
+
+### Training config
+
+| Setting | Value |
+|---|---|
+| Base | `unsloth/Qwen3-8B-unsloth-bnb-4bit` (QLoRA, 4-bit) |
+| LoRA | rank 32, alpha 32, dropout 0, all attention and MLP projections |
+| Schedule | 2 epochs, lr 1e-4 cosine, 15 warmup steps, no weight decay |
+| Batch | 2 per device x 8 gradient accumulation = 16 |
+| Max length | 4,096 tokens, loss on the latest assistant reply only, thinking on |
+
+### Benchmarks
+
+Merge the adapter into the bf16 base first (vLLM's LoRA path crashed for me), then run
+lm-evaluation-harness 0.4.13 with vLLM on both models with identical settings:
+
+```
+pip install vllm "lm_eval[vllm,ifeval]"
+python ollama/merge_lora.py <Qwen3-8B-bf16-dir> out/adapter merged
+
+M=Qwen/Qwen3-8B   # then again with M=merged
+ARGS="pretrained=$M,dtype=bfloat16,gpu_memory_utilization=0.94,max_model_len=10240,seed=1234"
+
+# knowledge: scored by answer likelihood, no thinking
+lm_eval --model vllm --model_args "$ARGS" --tasks mmlu,arc_challenge --batch_size 8192 --use_cache cache/ll
+
+# math and instructions: thinking on, graded after </think>
+lm_eval --model vllm \
+  --model_args "$ARGS,kv_cache_dtype=fp8,enable_thinking=True,think_end_token=</think>" \
+  --tasks gsm8k,ifeval --apply_chat_template --fewshot_as_multiturn \
+  --gen_kwargs "temperature=0.6,top_p=0.95,top_k=20,do_sample=True,max_gen_toks=8192" \
+  --batch_size 256 --use_cache cache/gen --log_samples --output_path results
+```
+
+FP8 applies only to the KV cache; weights stay bf16. On one L4 the full set took about 3 hours
+for base and 1.5 hours for Archon.
 
 ### Running locally in Ollama
 
