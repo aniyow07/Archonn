@@ -10,7 +10,8 @@ honestly against the base model.
 
 Archon is a fine-tune meant to review system design, ML and engineering plans: push back when
 something is wrong, sanity-check the numbers, and end with a clear recommendation in a short,
-conversational reply. The repo covers the full pipeline: data cleaning, QLoRA training with
+conversational reply. A second goal was speed on modest hardware: an 8B model that thinks briefly
+instead of for thousands of tokens, so answers come back quickly on a laptop GPU with 8 GB of VRAM. The repo covers the full pipeline: data cleaning, QLoRA training with
 thinking traces, blind pairwise evaluation, standard benchmarks, and a quantized build for Ollama.
 
 > **Status:** concluded. The fine-tune learned the target style but lost accuracy against base
@@ -116,6 +117,11 @@ More side-by-side chats: [`results/run2/examples.md`](results/run2/examples.md).
 - **Short rationales produce short reasoning.** The `<think>` rationales were written after the fact
   to justify existing answers. Archon thinks ~3x less than base, which makes it ~2x faster and
   less accurate on math.
+- **Shorter thinking is what makes it usable on a laptop.** On an 8 GB laptop GPU the Q4_K_M build
+  runs at about 42 tok/s, so output length is the wait time. Archon's average GSM8K answer is
+  281 tokens (~7 s) against 896 for base (~21 s), and on IFEval 481 (~11 s) against 1,204
+  (~29 s). Base also ran into the 8,192-token cap 16 times; Archon 3 times. Shorter outputs also
+  need less KV cache, which matters most when VRAM is tight. The trade-off is the accuracy loss above.
 - **Uniform data produces a rigid model.** Nearly all training replies were 170–200 words. Archon
   passed 18 of 50 IFEval word-count constraints vs 38 for base, and system prompts barely change
   its length.
@@ -194,7 +200,8 @@ ollama create archon:think -f ollama/Modelfile
 ollama run archon:think
 ```
 
-The Q4_K_M build runs fully on an 8 GB laptop GPU at about 42 tok/s.
+The Q4_K_M build runs fully on an 8 GB laptop GPU at about 42 tok/s. Times in Key findings are
+average output tokens from the benchmarks divided by this rate, not separate laptop runs.
 
 ## How it works
 
