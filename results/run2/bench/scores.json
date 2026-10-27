@@ -1,0 +1,83 @@
+{
+  "setup": {
+    "harness": "lm-evaluation-harness 0.4.13",
+    "engine": "vLLM 0.32",
+    "gpu": "1x NVIDIA L4 24GB",
+    "base": "Qwen/Qwen3-8B bf16",
+    "archon": "run2 LoRA merged into Qwen/Qwen3-8B bf16",
+    "mmlu_arc": "loglikelihood, MMLU 5-shot, ARC 0-shot",
+    "gsm8k_ifeval": "chat template, thinking on, graded after </think>, temp 0.6 top_p 0.95 top_k 20 seed 1234, max 8192 new tokens, FP8 KV cache, GSM8K 5-shot multiturn"
+  },
+  "scores": {
+    "base": {
+      "mmlu": 73.01,
+      "arc_challenge_acc_norm": 56.66,
+      "mmlu_humanities": 63.89,
+      "mmlu_stem": 72.82,
+      "mmlu_other": 77.08,
+      "mmlu_social_sciences": 83.04,
+      "gsm8k_flexible": 88.7,
+      "gsm8k_strict": 86.81,
+      "ifeval_prompt_level_strict_acc": 85.21,
+      "ifeval_inst_level_strict_acc": 89.69,
+      "ifeval_prompt_level_loose_acc": 88.35,
+      "ifeval_inst_level_loose_acc": 91.97
+    },
+    "archon": {
+      "mmlu": 73.0,
+      "arc_challenge_acc_norm": 56.91,
+      "mmlu_humanities": 63.7,
+      "mmlu_stem": 73.49,
+      "mmlu_other": 76.47,
+      "mmlu_social_sciences": 83.23,
+      "gsm8k_flexible": 81.65,
+      "gsm8k_strict": 78.85,
+      "ifeval_prompt_level_strict_acc": 76.89,
+      "ifeval_inst_level_strict_acc": 83.45,
+      "ifeval_prompt_level_loose_acc": 79.48,
+      "ifeval_inst_level_loose_acc": 85.61
+    }
+  },
+  "tokens": {
+    "base": {
+      "gsm8k": {
+        "mean": 896,
+        "median": 636,
+        "max": 8192,
+        "hit_8192_cap": 1
+      },
+      "ifeval": {
+        "mean": 1204,
+        "median": 765,
+        "max": 8192,
+        "hit_8192_cap": 15
+      }
+    },
+    "archon": {
+      "gsm8k": {
+        "mean": 281,
+        "median": 269,
+        "max": 1251,
+        "hit_8192_cap": 0
+      },
+      "ifeval": {
+        "mean": 481,
+        "median": 374,
+        "max": 8192,
+        "hit_8192_cap": 3
+      }
+    }
+  },
+  "minutes": {
+    "base": {
+      "mmlu_arc": 42,
+      "gsm8k": 103,
+      "ifeval": 31
+    },
+    "archon": {
+      "mmlu_arc": 38,
+      "gsm8k": 36,
+      "ifeval": 18
+    }
+  }
+}

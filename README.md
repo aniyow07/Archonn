@@ -167,22 +167,22 @@ Merge the adapter first, then run both models with identical settings:
 
 ```bash
 python ollama/merge_lora.py <Qwen3-8B-bf16-dir> out/adapter merged
+python eval/patch_lm_eval_stats.py           # optional: log tokens per answer, incl. thinking
 
-M=Qwen/Qwen3-8B   # then repeat with M=merged
-ARGS="pretrained=$M,dtype=bfloat16,gpu_memory_utilization=0.94,max_model_len=10240,seed=1234"
+bash eval/run_benchmarks.sh Qwen/Qwen3-8B base
+bash eval/run_benchmarks.sh merged archon
 
-lm_eval --model vllm --model_args "$ARGS" \
-  --tasks mmlu,arc_challenge --batch_size 8192 --use_cache cache/ll
-
-lm_eval --model vllm \
-  --model_args "$ARGS,kv_cache_dtype=fp8,enable_thinking=True,think_end_token=</think>" \
-  --tasks gsm8k,ifeval --apply_chat_template --fewshot_as_multiturn \
-  --gen_kwargs "temperature=0.6,top_p=0.95,top_k=20,do_sample=True,max_gen_toks=8192" \
-  --batch_size 256 --use_cache cache/gen --log_samples --output_path results
+python eval/bench_tokens.py                  # token stats from the patch
+python eval/bench_charts.py results/run2/bench
 ```
 
-FP8 applies to the KV cache only; weights stay bf16. Use a fixed `--batch_size`: with `auto`, the
-vLLM backend treats the whole task as one batch and `--use_cache` saves nothing until the end.
+[`eval/run_benchmarks.sh`](eval/run_benchmarks.sh) holds the exact lm-eval commands. FP8 applies to
+the KV cache only; weights stay bf16. It uses fixed batch sizes because with `--batch_size auto`
+the vLLM backend treats the whole task as one batch and `--use_cache` saves nothing until the end.
+
+The scores, token counts and timings are in
+[`results/run2/bench/scores.json`](results/run2/bench/scores.json), and every GSM8K and IFEval
+answer from both models is in `results/run2/bench/answers_*.jsonl`.
 
 ### Run locally with Ollama
 
@@ -254,13 +254,22 @@ Illustrative row (not from the dataset):
 │   ├── gen_vllm.py       # eval generation with vLLM
 │   └── gen_eval.py       # slower fallback with transformers
 ├── eval/
-│   ├── packets.py        # build blinded A/B packets
-│   ├── rules.py          # style rule checks
-│   └── unblind.py        # unblind and tally verdicts
+│   ├── packets.py              # build blinded A/B packets
+│   ├── rules.py                # style rule checks
+│   ├── unblind.py              # unblind and tally verdicts
+│   ├── run_benchmarks.sh       # MMLU, ARC, GSM8K, IFEval with lm-eval + vLLM
+│   ├── patch_lm_eval_stats.py  # log tokens per answer, thinking included
+│   ├── bench_tokens.py         # summarize those token logs
+│   └── bench_charts.py         # draw the benchmark charts
 ├── ollama/
-│   ├── merge_lora.py     # shard-by-shard LoRA merge on CPU
+│   ├── merge_lora.py           # shard-by-shard LoRA merge on CPU
 │   └── Modelfile
-└── results/run2/         # loss history, adapter config, judge summary, examples, charts
+└── results/run2/
+    ├── judge/                  # blind comparison summary
+    ├── bench/                  # scores.json, charts, every benchmark answer from both models
+    ├── examples.md             # side-by-side chats
+    ├── log_history.json        # training loss
+    └── adapter_config.json
 ```
 
 ## License
