@@ -1,35 +1,23 @@
 # Archon
 
-**Distilling a "theorycrafting sparring partner" into Qwen3-8B with QLoRA, then judging it honestly.**
+A QLoRA fine-tune of Qwen3-8B that I trained to be a sparring partner for system design and ML
+plans: it should push back on bad ideas, check the numbers, and end with a clear pick, in a short
+chatty reply. Personal, non-commercial project, done on one rented L4 and a laptop.
 
-> This is a cleaned public snapshot of a private working repo. Development history, datasets and
-> model weights are not included.
+It didn't work out the way I hoped. The fine-tune picked up the style almost perfectly, but it got
+worse at being right. Base Qwen3-8B beat it in a blind comparison in both training runs, and on
+standard benchmarks it matches base on knowledge but drops 7 points on GSM8K and 8 on IFEval. I've
+stopped the project here.
 
-Archon is a personal, non-commercial learning project. The goal was a small local model that
-cross-checks system design, ML and engineering plans: it pushes back when something is wrong,
-sanity-checks the numbers and ends with a clear recommendation, in short conversational replies.
-I took it end to end on a small budget: synthetic data, QLoRA training on one cloud GPU, a blind
-evaluation against the base model, and a quantized build that runs locally in Ollama.
+This repo is a cleaned copy of my private working repo. No weights, no training data, no history.
 
-**The headline result is negative, and that is the interesting part.** The fine-tune learned the
-target style almost perfectly but made more factual and arithmetic mistakes than the base model,
-so base Qwen3-8B won the blind comparison in both training runs. Standard benchmarks agree: same
-knowledge as the base model, but 7 points lower on GSM8K and 8 lower on IFEval. The write-up below
-explains why. The project is finished; there is no run 3.
+## Setup in short
 
-## At a glance
-
-| | |
-|---|---|
-| **Student model** | Qwen3-8B, QLoRA rank 32 (Unsloth + PEFT), 4-bit base |
-| **Data** | ~3,950 synthetic multi-turn chats from a strong reference model (3,758 train / 203 eval) |
-| **Compute** | One NVIDIA L4 (24 GB) on GCP, about 6.3 hours for 2 epochs |
-| **Eval** | Blind pairwise A/B against base Qwen3-8B on held-out chats, plus rule checks |
-| **Deployment** | Adapter merged shard by shard on CPU, GGUF + Q4_K_M via llama.cpp, served in Ollama at about 42 tok/s in ~6 GB of VRAM |
-| **Outcome** | Style transferred, substance did not. Base model won both runs. |
-| **Benchmarks** | Same MMLU/ARC as base, 7 points lower on GSM8K, 8 lower on IFEval, about 2x faster |
-
-## Pipeline
+- Qwen3-8B, QLoRA rank 32 on the 4-bit Unsloth build, 2 epochs, about 6.3 hours on an L4
+- About 3,950 synthetic multi-turn chats from a stronger reference model (3,758 train, 203 eval)
+- Blind A/B judging against base on held-out chats, plus rule checks, plus four standard benchmarks
+- Adapter merged into the base weights, quantized to Q4_K_M, runs in Ollama on an 8 GB laptop GPU
+  at about 42 tok/s
 
 ```mermaid
 flowchart LR
@@ -43,150 +31,126 @@ flowchart LR
 
 ## Results
 
+### Blind comparison
+
 | Run | What changed | Fine-tune wins | Base wins | Ties |
 |---|---|---|---|---|
 | Run 1 | Answers only, no thinking | 44 | 113 | 0 |
 | Run 2 | Added `<think>` rationales, stricter cleaning | 38 | 125 | 23 |
 
-Run 1 was judged on 157 held-out chats and run 2 on 186. Run 2 did not improve on run 1.
+157 held-out chats for run 1, 186 for run 2. Adding thinking didn't help.
 
-The fine-tune matched the reference shape on every rule check: no markdown headers, almost never
-over 250 words, a "My pick:" verdict and a follow-up question, and thinking under 710 tokens
-(base used up to 2,652). But in run 2 it was tagged for wrong facts 151 times against 90 for base,
-wrong arithmetic 69 against 31, and incoherent reasoning 67 against 9. It also invents specific
-flags, APIs and hardware specs. Base loses points for generic checklists, headers and agreeing too
-easily, but it is wrong less often.
+Style-wise run 2 did everything I asked: no markdown headers, almost never over 250 words, a
+"My pick:" line and a follow-up question every time, and thinking under 710 tokens (base went up to
+2,652). Substance was the problem. It was tagged for wrong facts 151 times vs 90 for base, wrong
+arithmetic 69 vs 31, and incoherent reasoning 67 vs 9, and it likes to make up specific flags,
+APIs and hardware specs. Base gets marked down for generic checklists and agreeing too easily, but
+it's wrong less often.
 
-- Full write-up: [`results/run2/judge/summary.md`](results/run2/judge/summary.md)
-- Example answers side by side: [`results/run2/examples.md`](results/run2/examples.md)
-- Training loss: eval loss went from **1.64 to 1.51** ([`results/run2/log_history.json`](results/run2/log_history.json))
+Judge write-up: [`results/run2/judge/summary.md`](results/run2/judge/summary.md). Example chats:
+[`results/run2/examples.md`](results/run2/examples.md). Eval loss went from 1.64 to 1.51
+([`log_history.json`](results/run2/log_history.json)), which turned out to mean very little.
 
-### Standard benchmarks
+### Benchmarks
 
-Full test sets with lm-evaluation-harness and vLLM on one L4, identical prompts for both models.
-Run 2's adapter was merged into the bf16 base weights. GSM8K and IFEval ran with thinking on and
-are graded only on the text after `</think>`; MMLU and ARC are scored by answer likelihood.
+I ran the full test sets with lm-evaluation-harness and vLLM, same prompts and settings for both
+models, with the run 2 adapter merged into the bf16 weights. GSM8K and IFEval run with thinking on
+and only the text after `</think>` is graded. MMLU and ARC are scored by answer likelihood, so no
+thinking there.
 
-| Benchmark | Base Qwen3-8B | Archon (run 2) |
+| Benchmark | Base Qwen3-8B | Archon |
 |---|---|---|
-| MMLU, 14,042 questions, 5-shot | 73.0 | 73.0 |
-| ARC-Challenge, 1,172 questions (acc_norm) | 56.7 | 56.9 |
-| GSM8K, 1,319 questions, 5-shot | 88.7 | 81.7 |
-| IFEval, 541 prompts (prompt-level strict) | 85.2 | 76.9 |
+| MMLU (14,042 questions, 5-shot) | 73.0 | 73.0 |
+| ARC-Challenge (1,172, acc_norm) | 56.7 | 56.9 |
+| GSM8K (1,319, 5-shot) | 88.7 | 81.7 |
+| IFEval (541, prompt-level strict) | 85.2 | 76.9 |
 
 ![Accuracy on full test sets](results/run2/bench/accuracy.png)
 
-The fine-tune kept the base model's knowledge but thinks about a third as much, and loses about
-7 points on math and 8 on following format instructions. It is faster for the same reason.
+Knowledge is untouched. What changed is how much it thinks: about 280 tokens per GSM8K answer
+against about 900 for base. That's why it's roughly twice as fast, and also why it slips on math.
 
 ![Average tokens per answer](results/run2/bench/tokens.png)
 
 ![Time per benchmark](results/run2/bench/time.png)
 
-### Putting it together
+It isn't all one way. Archon gets 64 GSM8K questions right that base misses (base gets 157 that
+Archon misses), and some of the gap is the grader: 53 of Archon's misses and 89 of base's had the
+right number written in a form it didn't accept, like `$7.00`.
 
-| Signal | Base Qwen3-8B | Archon (run 2) |
-|---|---|---|
-| Blind A/B on 186 held-out chats | 125 wins | 38 wins (23 ties) |
-| Matches the target reply style | No | Yes, on every rule check |
-| MMLU / ARC (knowledge) | 73.0 / 56.7 | 73.0 / 56.9 |
-| GSM8K (math) | 88.7 | 81.7 |
-| IFEval (instructions) | 85.2 | 76.9 |
-| IFEval prompts with a word-count rule passed | 38 of 50 | 18 of 50 |
-| Tokens per GSM8K answer, thinking included | 896 | 281 |
+IFEval shows the rigidity most clearly. On the 50 prompts with a word-count rule, base passed 38 and
+Archon 18. Almost every training reply was 170 to 200 words, and that's where Archon stays.
 
-Both evaluations point the same way. Fine-tuning did not damage what the model knows, but it
-taught it to reason briefly and answer in one fixed shape. That shows up as arithmetic slips,
-misread questions and ignored format rules, which is exactly what the blind judge tagged. Archon
-does fix some of base's mistakes too (64 GSM8K questions it gets right and base does not, against
-157 the other way), and part of the GSM8K gap is formatting: 53 of Archon's misses and 89 of
-base's had the right number in a form the grader did not accept, such as `$7.00`.
+### Some actual answers
 
-### Side by side
+From the benchmark runs, thinking left out, trimmed.
 
-Final answers from the benchmark runs, thinking omitted, trimmed for length.
+GSM8K: *"Emily can peel 6 shrimp a minute and saute 30 shrimp in 10 minutes. How long will it take
+her to peel and cook 90 shrimp?"* The answer is 45.
 
-**GSM8K: "Emily can peel 6 shrimp a minute and saute 30 shrimp in 10 minutes. How long will it
-take her to peel and cook 90 shrimp?"** (correct: 45)
-
-> **Base:** Peeling 90 shrimp takes 90 / 6 = 15 minutes. Cooking 90 shrimp at 3 per minute takes
-> 30 minutes. Total time is 15 + 30 = 45 minutes. **45**
+> Base: Peeling 90 shrimp takes 90 / 6 = 15 minutes. Cooking 90 at 3 per minute takes 30 minutes.
+> 15 + 30 = 45.
 >
-> **Archon:** Combined rate: 6 + 3 = 9 shrimp per minute. Total time: 90 / 9 = 10 minutes. **10**
+> Archon: Combined rate: 6 + 3 = 9 shrimp per minute. 90 / 9 = 10 minutes.
 
-Archon treats two steps done one after the other as if they ran at the same time.
+Archon adds the rates as if she peels and cooks at the same time.
 
-**GSM8K: "A plane travels 1200 miles in 3 hours. At the same rate, how many additional hours would
-it take to travel an additional 2000 miles?"** (correct: 5)
+GSM8K: *"A plane travels 1200 miles in 3 hours. At the same rate, how many additional hours would it
+take to travel an additional 2000 miles?"* The answer is 5.
 
-> **Base:** Speed is 400 miles per hour, so 2000 more miles takes 5 hours. **5**
+> Base: 400 miles per hour, so another 2000 miles takes 5 hours.
 >
-> **Archon:** 2000 / 400 = 5 hours. Since the plane already traveled 3 hours, the additional time
-> needed is 5 - 3 = 2 hours. **2**
+> Archon: 2000 / 400 = 5 hours. Since the plane already traveled 3 hours, the additional time is
+> 5 - 3 = 2 hours.
 
-The arithmetic is right; the reading of the question is not.
+Math fine, question misread.
 
-**IFEval: "Write a blog post with 400 or more words about the benefits of sleeping in a hammock."**
+IFEval: *"Write a blog post with 400 or more words about the benefits of sleeping in a hammock."*
+Base wrote 584 words. Archon wrote 333.
 
-> **Base:** 584 words, passes.
->
-> **Archon:** 333 words, fails. Training replies were almost all 170 to 200 words, and Archon
-> stays near that length even when the prompt asks for more.
+IFEval: *"Can you write a rap that doesn't include the keywords 'Yo', 'check', and 'peace'?"* Base
+wrote two verses without them. Archon's second line was "No 'Yo', no 'check', no 'peace', just my
+style."
 
-**IFEval: "Can you write a rap that doesn't include the keywords 'Yo', 'check', and 'peace'?"**
+## What I took away from it
 
-> **Base:** A two-verse rap without the three words, passes.
->
-> **Archon:** "No 'Yo', no 'check', no 'peace', just my style." Fails by quoting the banned words.
+Training on another model's answers copies the format, not the thinking behind it. Lower eval loss
+and a perfect style match didn't mean better answers; the model just learned to sound sure of
+itself in the right shape, including when it was wrong.
 
-## What I learned
+The data was too uniform. Nearly every reply had the same length and structure, so the model can't
+do anything else. Asking for shorter or longer replies in the system prompt barely changes it.
 
-- **SFT on another model's text copies the format, not the reasoning.** A lower eval loss and a
-  perfect style match did not mean better answers. The model learned to sound confident in the
-  right shape, including when it was wrong.
-- **Evaluate blind, and check the judge.** Pairs were shuffled with sides randomized and the key
-  kept aside until every verdict was in. A 30-pair re-judge with sides swapped found no position
-  flips.
-- **Data cleaning has to respect conversation structure.** Later turns build on earlier replies,
-  so a chat is cut at its first bad reply rather than dropping single turns.
-- **Getting a fine-tune onto consumer hardware is its own project.** Ollama would not load the
-  LoRA directly, so I merged it shard by shard on the CPU to stay within RAM, then converted and
-  quantized it with llama.cpp.
-- **Uniform training data makes a rigid model.** Almost every training reply was 170 to 200
-  words with the same structure, so Archon answers in that shape whatever the prompt asks. It
-  passed 18 of 50 IFEval word-count rules against 38 for base, and a system prompt asking for
-  shorter or longer replies barely moves it.
-- **Short reasoning in the data means short reasoning in the model.** The rationales were written
-  after the fact to justify a known answer, so they are brief. Archon learned to think for about
-  280 tokens where base thinks for about 900, and its math suffers for it.
-- **Benchmarks and a judge answer different questions.** MMLU and ARC showed no damage at all,
-  which on its own would have looked like a clean fine-tune. The judge and GSM8K/IFEval are what
-  exposed the cost. Run both.
-- **vLLM's runtime LoRA path crashed on this adapter.** Serving base + LoRA in vLLM 0.32 hit a
-  CUDA "illegal memory access" partway through, with and without CUDA graphs. Merging the adapter
-  into the bf16 weights first (same math, no LoRA kernels) ran cleanly and faster.
-- **Plan long GPU runs to survive a crash.** lm-eval's `--use_cache` only saves finished batches,
-  and with `--batch_size auto` the vLLM backend treats the whole benchmark as one batch. A fixed
-  batch size makes the cache useful.
+The rationales were too short. They were written afterwards to explain answers that already
+existed, so they're brief, and the model learned to reason briefly.
 
-## Project status
+If I'd only run MMLU and ARC I would have called this a clean fine-tune. The judge and GSM8K/IFEval
+are what showed the cost, so I'd always run something that tests reasoning and instruction
+following, not just knowledge.
 
-Concluded. Archon reached its style goal and taught me where SFT distillation stops working, which
-was the point of the exercise. If I did it again I would:
+Smaller practical things:
 
-- Vary reply length and format on purpose in the training data, including replies that follow
-  explicit format instructions.
-- Keep the reference model's own reasoning instead of writing rationales afterwards, or use
-  on-policy distillation, where the student generates and a stronger model scores or corrects it.
-- Run GSM8K and IFEval on a small slice after the first epoch, before paying for the full run.
+- Blind judging needs care. I shuffled pairs, randomized sides, kept the key aside until every
+  verdict was in, and re-judged 30 pairs with sides swapped. No position flips.
+- When cleaning multi-turn data, cut the chat at the first bad reply. Later turns build on it, so
+  dropping single turns leaves broken conversations.
+- Ollama wouldn't load the LoRA directly, so I merged it shard by shard on CPU to fit in RAM, then
+  converted and quantized with llama.cpp.
+- vLLM 0.32 crashed with a CUDA "illegal memory access" when serving this adapter as a LoRA, with
+  and without CUDA graphs. Merging it into the weights first fixed it and was faster anyway.
+- For long eval runs, lm-eval's `--use_cache` only saves finished batches, and `--batch_size auto`
+  on the vLLM backend makes the whole benchmark one batch. Use a fixed batch size or a crash costs
+  you everything.
+
+If I started over I'd vary reply length and format on purpose, keep the reference model's own
+reasoning instead of writing rationales afterwards (or try on-policy distillation), and run a small
+GSM8K/IFEval slice after the first epoch before paying for the rest.
 
 ## How it works
 
-**Data.** About 3,950 synthetic multi-turn chats in which a strong reference model plays the
-partner: it reviews a user's plan, checks the numbers and gives a verdict. For run 2, each
-reference answer was given a first-person rationale written by a Qwen 32B model, explaining how
-one would arrive at that answer. The rationale becomes the `<think>` block, so the student learns
-to reason before it answers:
+**Data.** About 3,950 synthetic multi-turn chats where a stronger reference model plays the partner:
+it reviews someone's plan, checks the numbers and gives a verdict. For run 2 a Qwen 32B model wrote
+a first-person rationale for each reference answer, and that goes in the `<think>` block:
 
 ```
 <think>
@@ -196,28 +160,33 @@ to reason before it answers:
 {answer}
 ```
 
-**Cleaning.** [`train/prep_distill.py`](train/prep_distill.py) cuts each chat before the first
-reply whose rationale rejects it, flags a flaw in the answer, is cut off or near-empty, or
-contains stray tags or CJK text. Everything after a bad reply is dropped too. That left
-**3,366 training chats** (9,134 assistant turns) and 186 held-out eval chats.
+**Cleaning.** [`train/prep_distill.py`](train/prep_distill.py) cuts each chat before the first reply
+whose rationale rejects it, flags a flaw in the answer, is cut off or nearly empty, or has stray
+tags or CJK text. That left 3,366 training chats (9,134 assistant turns) and 186 eval chats.
 
-**Training.** [`train/sft.py`](train/sft.py) runs QLoRA rank 32 on
-`unsloth/Qwen3-8B-unsloth-bnb-4bit` with thinking on. Each assistant turn is its own sample, with
-loss on that reply only, because Qwen3's template keeps the think block only on the latest reply.
-[`train/check_data.py`](train/check_data.py) verifies the template and loss masking with the real
-tokenizer before training starts.
+**Training.** [`train/sft.py`](train/sft.py), QLoRA on `unsloth/Qwen3-8B-unsloth-bnb-4bit` with
+thinking on. Each assistant turn is its own sample with loss on that reply only, since Qwen3's
+template keeps the think block only on the latest reply. [`train/check_data.py`](train/check_data.py)
+checks the template and loss masking with the real tokenizer before anything trains.
 
-**Eval generation.** [`train/gen_vllm.py`](train/gen_vllm.py) uses vLLM with FP8 weights and
-continuous batching. Base and fine-tune get the same prompts: one held-out assistant turn per eval
-chat, picked with a fixed seed, with Qwen3's thinking-mode sampling.
+| Setting | Value |
+|---|---|
+| LoRA | rank 32, alpha 32, dropout 0, all attention and MLP projections |
+| Schedule | 2 epochs, lr 1e-4 cosine, 15 warmup steps, no weight decay |
+| Batch | 2 per device x 8 accumulation = 16 |
+| Max length | 4,096 tokens |
 
-**Judging.** [`eval/`](eval) builds blinded A/B packets, runs rule checks on both outputs and the
-reference, and then unblinds.
+**Eval generation.** [`train/gen_vllm.py`](train/gen_vllm.py), vLLM with FP8 weights. Both models get
+the same prompts: one held-out assistant turn per eval chat, picked with a fixed seed, Qwen3's
+thinking-mode sampling.
+
+**Judging.** [`eval/`](eval) builds the blinded A/B packets, runs rule checks on both outputs and the
+reference, and unblinds at the end.
 
 ## Data format
 
-Training and eval files are chat JSONL, one chat per line. Every assistant reply is one `<think>`
-block followed by the answer. This row is made up to show the shape; it is not from the dataset.
+Chat JSONL, one chat per line, each assistant reply a `<think>` block then the answer. This row is
+made up to show the shape.
 
 ```json
 {"messages": [
@@ -227,51 +196,39 @@ block followed by the answer. This row is made up to show the shape; it is not f
 ]}
 ```
 
-## Repository layout
+## Repo layout
 
 | Path | What |
 |---|---|
-| `train/prep_distill.py` | Clean rationale data into `data/distill/{train,eval}.jsonl` |
+| `train/prep_distill.py` | Cleans rationale data into `data/distill/{train,eval}.jsonl` |
 | `train/sft.py` | QLoRA fine-tune (Unsloth + transformers Trainer) |
-| `train/check_data.py` | Pre-flight check of chat template and loss masking |
+| `train/check_data.py` | Checks chat template and loss masking before training |
 | `train/gen_vllm.py` | Eval generation with vLLM (FP8) |
-| `train/gen_eval.py` | Eval generation with Unsloth/transformers (slower fallback) |
-| `eval/packets.py`, `eval/rules.py`, `eval/unblind.py` | Blinded pairwise judging and rule checks |
-| `ollama/` | Shard-by-shard LoRA merge script and the Modelfile for Ollama |
-| `results/run2/` | Loss history, adapter config, judge summary, example answers |
-| `results/run2/bench/` | Benchmark charts |
+| `train/gen_eval.py` | Slower fallback with Unsloth/transformers |
+| `eval/packets.py`, `eval/rules.py`, `eval/unblind.py` | Blind pairwise judging and rule checks |
+| `ollama/` | Shard-by-shard LoRA merge script and the Ollama Modelfile |
+| `results/run2/` | Loss history, adapter config, judge summary, examples, benchmark charts |
 
 ## Reproducing
 
-You need your own chat data in the format above; the dataset is not published. Training and eval
-generation need a CUDA GPU (an L4 with 24 GB was enough). On the GPU machine:
+The dataset isn't published, so you need your own chats in the format above. Training and
+generation need a CUDA GPU; a 24 GB L4 was enough.
 
 ```
 pip install unsloth vllm
-python train/check_data.py          # run from a folder with data/train.jsonl and data/eval.jsonl
+python train/check_data.py          # from a folder with data/train.jsonl and data/eval.jsonl
 python train/sft.py --data data --out out
 python train/gen_vllm.py --out out/gen_base.jsonl --max-new 4096
 python train/gen_vllm.py --adapter out/adapter --out out/gen_ft.jsonl --max-new 2048
 ```
 
-For judging, copy `gen_base.jsonl` and `gen_ft.jsonl` into `results/run2/`, then run
-`python eval/rules.py` and `python eval/packets.py`, judge the packets, and run
-`python eval/unblind.py`.
-
-### Training config
-
-| Setting | Value |
-|---|---|
-| Base | `unsloth/Qwen3-8B-unsloth-bnb-4bit` (QLoRA, 4-bit) |
-| LoRA | rank 32, alpha 32, dropout 0, all attention and MLP projections |
-| Schedule | 2 epochs, lr 1e-4 cosine, 15 warmup steps, no weight decay |
-| Batch | 2 per device x 8 gradient accumulation = 16 |
-| Max length | 4,096 tokens, loss on the latest assistant reply only, thinking on |
+To judge, copy `gen_base.jsonl` and `gen_ft.jsonl` into `results/run2/`, run `python eval/rules.py`
+and `python eval/packets.py`, judge the packets, then `python eval/unblind.py`.
 
 ### Benchmarks
 
-Merge the adapter into the bf16 base first (vLLM's LoRA path crashed for me), then run
-lm-evaluation-harness 0.4.13 with vLLM on both models with identical settings:
+Merge the adapter first, then run lm-evaluation-harness 0.4.13 on both models with the same
+settings:
 
 ```
 pip install vllm "lm_eval[vllm,ifeval]"
@@ -280,10 +237,10 @@ python ollama/merge_lora.py <Qwen3-8B-bf16-dir> out/adapter merged
 M=Qwen/Qwen3-8B   # then again with M=merged
 ARGS="pretrained=$M,dtype=bfloat16,gpu_memory_utilization=0.94,max_model_len=10240,seed=1234"
 
-# knowledge: scored by answer likelihood, no thinking
+# MMLU and ARC, likelihood scoring
 lm_eval --model vllm --model_args "$ARGS" --tasks mmlu,arc_challenge --batch_size 8192 --use_cache cache/ll
 
-# math and instructions: thinking on, graded after </think>
+# GSM8K and IFEval, thinking on
 lm_eval --model vllm \
   --model_args "$ARGS,kv_cache_dtype=fp8,enable_thinking=True,think_end_token=</think>" \
   --tasks gsm8k,ifeval --apply_chat_template --fewshot_as_multiturn \
@@ -291,13 +248,12 @@ lm_eval --model vllm \
   --batch_size 256 --use_cache cache/gen --log_samples --output_path results
 ```
 
-FP8 applies only to the KV cache; weights stay bf16. On one L4 the full set took about 3 hours
-for base and 1.5 hours for Archon.
+FP8 is only for the KV cache; the weights stay bf16. The full set took about 3 hours for base and
+1.5 for Archon on one L4.
 
-### Running locally in Ollama
+### Running it in Ollama
 
-The trained adapter is not published. To run your own adapter, merge it into the base model
-first, since Ollama does not load the LoRA directly:
+The adapter isn't published. For your own, merge it first since Ollama won't load the LoRA:
 
 ```
 python ollama/merge_lora.py <Qwen3-8B-bf16-dir> out/adapter merged
@@ -307,10 +263,9 @@ ollama create archon:think -f ollama/Modelfile
 ollama run archon:think
 ```
 
-The Modelfile sets the training system prompt, a ChatML template that keeps the think block only
-on the latest reply, and Qwen3's thinking-mode sampling. The Q4_K_M model runs fully on an 8 GB
-laptop GPU.
+The Modelfile has the training system prompt, a ChatML template that keeps the think block only on
+the latest reply, and Qwen3's thinking-mode sampling. Q4_K_M fits fully on an 8 GB laptop GPU.
 
 ## License
 
-Code is Apache-2.0, see [LICENSE](LICENSE). No model weights or training data are distributed.
+Code is Apache-2.0, see [LICENSE](LICENSE). No model weights or training data are included.
