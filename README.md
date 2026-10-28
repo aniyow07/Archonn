@@ -51,7 +51,9 @@ wrong arithmetic (69 vs 31) and incoherent reasoning (67 vs 9). Full write-up in
 Full test sets, [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness) 0.4.13
 with vLLM on one NVIDIA L4, identical prompts and settings for both models.
 
-| Benchmark | Base Qwen3-8B | Archon (run 2) | Δ |
+Accuracy in %, higher is better.
+
+| Benchmark ↑ | Base Qwen3-8B | Archon (run 2) | Δ |
 |---|---|---|---|
 | MMLU (14,042, 5-shot) | 73.0 | 73.0 | 0.0 |
 | ARC-Challenge (1,172, acc_norm) | 56.7 | 56.9 | +0.2 |
@@ -60,7 +62,9 @@ with vLLM on one NVIDIA L4, identical prompts and settings for both models.
 
 ![Accuracy on full test sets](results/run2/bench/accuracy.png)
 
-| Efficiency | Base Qwen3-8B | Archon (run 2) |
+Lower is better for both tokens and time.
+
+| Efficiency ↓ | Base Qwen3-8B | Archon (run 2) |
 |---|---|---|
 | Tokens per GSM8K answer (incl. thinking) | 896 | 281 |
 | Tokens per IFEval answer (incl. thinking) | 1,204 | 481 |

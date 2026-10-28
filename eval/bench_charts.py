@@ -22,11 +22,11 @@ def grouped(fname, title, ylabel, cats, base, ft, fmt, ymax=None):
     ax.legend(frameon=False, loc="lower right", bbox_to_anchor=(1, 1.0), ncol=2, fontsize=9); ax.grid(axis="y", alpha=0.25); ax.set_axisbelow(True)
     fig.tight_layout(); fig.savefig(f"{out}/{fname}", facecolor="white"); plt.close(fig)
 
-grouped("accuracy.png", "Accuracy on full test sets", "Accuracy (%)",
+grouped("accuracy.png", "Accuracy on full test sets (higher is better)", "Accuracy (%) ↑",
         ["MMLU\n(14,042)", "ARC-Challenge\n(1,172)", "GSM8K\n(1,319)", "IFEval\n(541)"],
         [73.0, 56.7, 88.7, 85.2], [73.0, 56.9, 81.7, 76.9], lambda v: f"{v:.1f}", 105)
-grouped("tokens.png", "Average tokens per answer, thinking included", "Tokens",
+grouped("tokens.png", "Tokens per answer, incl. thinking (lower is better)", "Tokens ↓",
         ["GSM8K", "IFEval"], [896, 1204], [281, 481], lambda v: f"{v:,.0f}")
-grouped("time.png", "Time per benchmark on one NVIDIA L4", "Minutes",
+grouped("time.png", "Time per benchmark on one L4 (lower is better)", "Minutes ↓",
         ["MMLU + ARC", "GSM8K", "IFEval", "Total"], [42, 103, 31, 176], [38, 36, 18, 92], lambda v: f"{v:.0f}")
 print("ok")
